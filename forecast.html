@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en-AU"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Marine forecast">
+<title>Marine forecast planner</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#14212b;--mut:#566673;--line:#c9d3da;--acc:#0a5c7a;--on:#fff;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1820;--card:#15252f;--ink:#e7eef3;--mut:#9fb0bc;--line:#2b3f4c;--acc:#5cc3e0;--on:#06202b}}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,system-ui,"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--acc);color:var(--on)}
+header h1{font-size:19px;margin:0;flex:1}
+header button{border-color:var(--on);color:var(--on)}
+details,.card{background:var(--card);border:1px solid var(--line);border-radius:10px;margin:10px 12px}
+summary{padding:13px 14px;font-weight:700;font-size:17px;min-height:44px;box-sizing:border-box}
+.b,.card{padding:0 14px 14px}.card{padding-top:12px}
+label{display:block;font-size:14px;color:var(--mut);margin-top:10px}
+input,select{width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:10px;min-height:44px;margin-top:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+.c2{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+button{font:inherit;min-height:44px;border-radius:8px;border:1px solid var(--acc);background:transparent;color:var(--acc);padding:0 14px}
+.w{width:100%;margin-top:10px}.pri{background:var(--acc);color:var(--on)}
+.note{font-size:13px;color:var(--mut);margin:8px 12px}
+#days{display:flex;gap:8px;overflow-x:auto;padding:2px 12px 6px}
+.day{flex:none;min-width:92px;text-align:left;padding:8px 10px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-left-width:6px;line-height:1.3}
+.day b{display:block}.day small{color:var(--mut)}
+.day.on{outline:2px solid var(--acc)}
+.s0{border-left-color:#2e9e5b}.s1{border-left-color:#e0a000}.s2{border-left-color:#d32f2f}
+.tag{display:inline-block;padding:2px 10px;border-radius:12px;font-weight:700;font-size:14px}
+.t0{background:rgba(46,158,91,.25)}.t1{background:rgba(224,160,0,.3)}.t2{background:rgba(211,47,47,.3)}
+.tw{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+th,td{padding:7px 6px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600}
+td:first-child,th:first-child{position:sticky;left:0;background:var(--card);text-align:left}
+td.l1{background:rgba(224,160,0,.3)}td.l2{background:rgba(211,47,47,.35);font-weight:700;text-decoration:underline}
+ul{margin:6px 0 0;padding-left:20px}ul.f{font-size:14px;color:var(--mut);margin-top:10px}ul.f button{min-height:36px;padding:0 12px;margin-right:4px}h1 small{font-size:12px;font-weight:400;opacity:.85}
+</style></head><body>
+<header><h1>Marine forecast <small>v3</small></h1><button id="run">Update</button></header>
+<details id="set" open><summary>Position, hours and limits</summary><div class="b">
+<label>Search any place, worldwide<input id="q" placeholder="e.g. Port Phillip, Auckland, Phuket" autocorrect="off"></label><button class="w" id="sq">Search</button><div id="res"></div><p class="note" style="margin:8px 0 0">Search finds town centres. Marine data needs open water, so move the point offshore if it is missing.</p><label>Or pick a region (approx. offshore point)<select id="pre"><option value="">Choose…</option></select></label>
+<label>Position (lat/long DDM or decimal)<input id="pos" placeholder="33°49.800'S 151°21.000'E" autocapitalize="characters" autocorrect="off"></label>
+<button class="w" id="gps">Use my location</button>
+<div class="c2"><label>Ops window start (hour)<input id="h1" type="number" inputmode="numeric" min="0" max="23"></label><label>Ops window end (hour)<input id="h2" type="number" inputmode="numeric" min="0" max="23"></label></div>
+<p class="note" style="margin:10px 0 0">Limits (set to your SOP). Amber at 80% of a limit, red past it. Visibility is the reverse.</p>
+<div class="c2" id="lims"></div>
+<button class="w pri" id="run2">Get forecast</button>
+</div></details>
+<p class="note" id="st">Choose a position, then tap Get forecast.</p>
+<div id="days"></div>
+<div id="out"></div>
+<p class="note">Open-Meteo model data, not an official forecast. Always check the BoM marine forecast and warnings before launch: <a href="https://www.bom.gov.au/marine/" target="_blank" rel="noopener">bom.gov.au/marine</a>. Tide height is modelled, hourly.</p>
+<script>
+const LIM={wind:['Wind (kt)',15],gust:['Gust (kt)',20],wave:['Wave (m)',1],swell:['Swell (m)',1.5],vis:['Visibility min (km)',2],rain:['Rain chance (%)',60]};
+const PRE={
+'NSW':{'Sydney (off the Heads)':[-33.83,151.35],'Botany Bay':[-34.02,151.25],'Broken Bay':[-33.57,151.4],'Port Hacking':[-34.08,151.2],'Wollongong':[-34.43,151.05],'Jervis Bay':[-35.05,150.85],'Newcastle':[-32.93,151.9],'Port Stephens':[-32.7,152.25],'Coffs Harbour':[-30.3,153.3],'Byron Bay':[-28.65,153.8],'Eden':[-37.07,150.1]},
+'QLD':{'Gold Coast':[-28.0,153.6],'Moreton Bay':[-27.3,153.4],'Hervey Bay':[-25.2,153.0],'Whitsundays':[-20.2,149.2],'Townsville':[-19.2,147.2],'Cairns':[-16.8,146.2]},
+'VIC and TAS':{'Port Phillip Heads':[-38.3,144.65],'Western Port':[-38.5,145.3],'Wilsons Promontory':[-39.1,146.5],'Hobart (Storm Bay)':[-43.1,147.5],'Tamar approaches':[-41.0,146.8]},
+'SA, WA and NT':{'Adelaide (Gulf St Vincent)':[-35.1,138.3],'Kangaroo Island':[-36.0,137.0],'Perth (Fremantle)':[-32.1,115.5],'Geraldton':[-28.7,114.4],'Broome':[-17.9,122.0],'Darwin':[-12.3,130.7]},
+'New Zealand':{'Auckland (Hauraki Gulf)':[-36.7,174.9],'Bay of Islands':[-35.2,174.3],'Wellington':[-41.4,174.8],'Lyttelton':[-43.7,173.1]},
+'Pacific':{'Fiji (Suva)':[-18.3,178.4],'Noumea':[-22.4,166.5],'Port Moresby':[-9.6,147.1],'Honiara':[-9.3,160.0],'Tahiti':[-17.7,-149.5],'Oahu (Hawaii)':[21.2,-157.9]},
+'Asia and Middle East':{'Singapore Strait':[1.15,103.8],'Phuket':[7.8,98.2],'Bali (Benoa)':[-8.8,115.3],'Manila Bay':[14.3,120.7],'Hong Kong':[22.1,114.3],'Tokyo Bay':[35.2,139.8],'Dubai':[25.4,54.9]},
+'Europe and Africa':{'Solent (UK)':[50.6,-1.2],'Plymouth (UK)':[50.2,-4.1],'North Sea (Aberdeen)':[57.2,-1.9],'Brest (France)':[48.3,-4.7],'Strait of Gibraltar':[36.0,-5.4],'Mallorca':[39.4,2.9],'Saronic Gulf (Greece)':[37.7,23.6],'Malta':[35.9,14.6],'Cape Town':[-34.1,18.2]},
+'Americas':{'Vancouver (Strait of Georgia)':[49.2,-123.4],'San Francisco':[37.8,-122.6],'San Diego':[32.6,-117.3],'Miami':[25.7,-80.0],'New York approaches':[40.4,-73.9],'Boston':[42.3,-70.8],'Rio de Janeiro':[-23.1,-43.1]}},FLAT={};
+const DIRS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'],cd=d=>d==null?'':DIRS[Math.round(d/22.5)%16];
+const dec=s=>{s=(s||'').trim();const m=s.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);if(m&&!/[NSEW°']/i.test(s))return[+m[1],+m[2]];
+ const p=[...s.matchAll(/(\d+)\s*[°\s]\s*(\d+(?:\.\d+)?)\s*'?\s*([NSEW])/gi)];if(p.length<2)return null;
+ const c=x=>(+x[1]+ +x[2]/60)*(/[SW]/i.test(x[3])?-1:1);return[c(p[0]),c(p[1])]};
+const ddm=(v,a)=>{const s=v<0?a[1]:a[0];v=Math.abs(v);const d=Math.floor(v),m=(v-d)*60;return d+'°'+(m<10?'0':'')+m.toFixed(3)+"'"+s};
+const $=s=>document.querySelector(s),R=Math.round,N=(v,d=0)=>v==null?'–':v.toFixed(d),gj=u=>fetch(u).then(r=>{if(!r.ok)throw new Error(r.status);return r.json()});
+let C={pos:'',h1:6,h2:18,lim:{},sel:null},D=null;
+try{C=Object.assign(C,JSON.parse(localStorage.getItem('fc')||'{}'));D=JSON.parse(localStorage.getItem('fcd')||'null')}catch(e){}
+if(D&&D.v!=3)D=null;
+const Lm=k=>C.lim[k]??LIM[k][1];
+$('#pre').innerHTML+=Object.entries(PRE).map(([g,o])=>`<optgroup label="${g}">${Object.keys(o).map(k=>{FLAT[k]=o[k];return `<option>${k}</option>`}).join('')}</optgroup>`).join('');
+$('#lims').innerHTML=Object.keys(LIM).map(k=>`<label>${LIM[k][0]}<input type="number" inputmode="decimal" step="any" data-l="${k}"></label>`).join('');
+$('#pos').value=C.pos;$('#h1').value=C.h1;$('#h2').value=C.h2;document.querySelectorAll('[data-l]').forEach(e=>e.value=Lm(e.dataset.l));
+function keep(){C.pos=$('#pos').value;C.h1=+$('#h1').value;C.h2=+$('#h2').value;document.querySelectorAll('[data-l]').forEach(e=>{if(e.value!=='')C.lim[e.dataset.l]=+e.value});try{localStorage.setItem('fc',JSON.stringify(C))}catch(e){}}
+const setPos=ll=>{$('#pos').value=ddm(ll[0],'NS')+' '+ddm(ll[1],'EW');keep()};
+$('#pre').onchange=e=>{if(FLAT[e.target.value])setPos(FLAT[e.target.value])};
+$('#gps').onclick=()=>navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>setPos([p.coords.latitude,p.coords.longitude]),()=>{$('#st').textContent='Location not available. Allow location for this site in Safari settings.'}):0;
+document.addEventListener('input',e=>{if(e.target.closest('#set')){keep();if(D)render()}});
+async function run(){
+ keep();const ll=dec(C.pos),s=$('#st');
+ if(!ll){s.textContent='Enter a position (lat/long DDM or decimal) or pick a preset.';return}
+ s.textContent='Fetching…';
+ try{
+  const q=`latitude=${ll[0]}&longitude=${ll[1]}&timezone=auto&forecast_days=7`;
+  const fx='temperature_2m,apparent_temperature,cloud_cover,pressure_msl,dew_point_2m,precipitation,cape,uv_index,';
+  const mb=`https://marine-api.open-meteo.com/v1/marine?${q}&hourly=wave_height,wave_period,swell_wave_height,swell_wave_period,swell_wave_direction,sea_level_height_msl`;
+  const [a,m]=await Promise.all([
+   gj(`https://api.open-meteo.com/v1/forecast?${q}&wind_speed_unit=kn&hourly=${fx}wind_speed_10m,wind_gusts_10m,wind_direction_10m,precipitation_probability,visibility,weather_code&daily=sunrise,sunset`),
+   gj(mb+',wave_direction,wind_wave_height,ocean_current_velocity,ocean_current_direction,sea_surface_temperature').catch(()=>gj(mb)).catch(()=>null)]);
+  D={a,m,t:Date.now(),v:3};try{localStorage.setItem('fcd',JSON.stringify(D))}catch(e){}
+  $('#set').open=false;render();
+ }catch(e){s.textContent='Fetch failed ('+e.message+'). Showing the last saved forecast if there is one.';if(D)render()}}
+$('#sq').onclick=async()=>{const q=$('#q').value.trim(),r=$('#res');if(!q)return;r.textContent='Searching…';
+ try{const j=await gj(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=en&format=json`);r.innerHTML='';
+  (j.results||[]).forEach(x=>{const b=document.createElement('button');b.type='button';b.className='w';b.textContent=[x.name,x.admin1,x.country].filter(Boolean).join(', ');b.onclick=()=>{setPos([x.latitude,x.longitude]);r.innerHTML='';run()};r.appendChild(b)});
+  if(!(j.results||[]).length)r.textContent='No places found. Try another name.';
+ }catch(e){r.textContent='Search failed ('+e.message+'). Check signal.'}};
+$('#q').addEventListener('keydown',e=>{if(e.key=='Enter')$('#sq').click()});
+$('#run').onclick=$('#run2').onclick=run;
+const lvl=(v,k)=>v==null?0:k=='vis'?(v<Lm(k)?2:v<Lm(k)*1.5?1:0):(v>Lm(k)?2:v>Lm(k)*.8?1:0);
+const ST=['GO','CAUTION','NO-GO'],hh=h=>String(h).padStart(2,'0')+':00';
+function sunT(ds,ll,off){
+ if(!ll)return{cd:'–',cu:'–',nd:'–',nu:'–'};
+ const rad=Math.PI/180,dt=new Date(ds+'T12:00:00Z'),doy=Math.floor((dt-Date.UTC(dt.getUTCFullYear(),0,0))/864e5),g=2*Math.PI/365*(doy-1);
+ const eq=229.18*(.000075+.001868*Math.cos(g)-.032077*Math.sin(g)-.014615*Math.cos(2*g)-.040849*Math.sin(2*g));
+ const de=.006918-.399912*Math.cos(g)+.070257*Math.sin(g)-.006758*Math.cos(2*g)+.000907*Math.sin(2*g)-.002697*Math.cos(3*g)+.00148*Math.sin(3*g);
+ const noon=12-ll[1]/15-eq/60,p2=x=>String(x).padStart(2,'0');
+ const f=x=>{const t=Math.round((((x+off)%24)+24)%24*60)%1440;return p2(Math.floor(t/60))+':'+p2(t%60)};
+ const at=alt=>{const c=(Math.sin(alt*rad)-Math.sin(ll[0]*rad)*Math.sin(de))/(Math.cos(ll[0]*rad)*Math.cos(de));if(Math.abs(c)>1)return['–','–'];const H=Math.acos(c)/rad/15;return[f(noon-H),f(noon+H)]};
+ const c=at(-6),n=at(-12);return{cd:c[0],cu:c[1],nd:n[0],nu:n[1]}}
+function moonI(ds){const ph=((((Date.parse(ds+'T12:00:00Z')-Date.UTC(2000,0,6,18,14))/864e5)/29.530588)%1+1)%1;return Math.round((1-Math.cos(2*Math.PI*ph))/2*100)+'% '+(ph<.5?'waxing':'waning')}
+let ROWS=[];
+function render(){
+ const {a,m}=D,A=a.hourly,X=k=>A[k]||[],mx={};if(m)m.hourly.time.forEach((t,i)=>mx[t]=i);
+ ROWS=A.time.map((t,i)=>{const j=mx[t],M=m&&j!=null?m.hourly:null,g=k=>M&&M[k]?M[k][j]:null,vis=A.visibility[i]==null?null:A.visibility[i]/1000;
+  const o={t,d:t.slice(0,10),h:+t.slice(11,13),w:A.wind_speed_10m[i],g:A.wind_gusts_10m[i],dr:A.wind_direction_10m[i],r:A.precipitation_probability[i],v:vis,th:A.weather_code[i]>=95,wv:g('wave_height'),wp:g('wave_period'),sw:g('swell_wave_height'),sp:g('swell_wave_period'),sd:g('swell_wave_direction'),td:g('sea_level_height_msl'),tc:X('temperature_2m')[i],fl:X('apparent_temperature')[i],cl:X('cloud_cover')[i],ps:X('pressure_msl')[i],dp:i>=3&&X('pressure_msl')[i]!=null&&X('pressure_msl')[i-3]!=null?X('pressure_msl')[i]-X('pressure_msl')[i-3]:null,dw:X('dew_point_2m')[i],mm:X('precipitation')[i],cp:X('cape')[i],uv:X('uv_index')[i],cu:g('ocean_current_velocity')==null?null:g('ocean_current_velocity')/1.852,cdr:g('ocean_current_direction'),sst:g('sea_surface_temperature'),wdr:g('wave_direction'),ww:g('wind_wave_height')};
+  o.l={w:lvl(o.w,'wind'),g:lvl(o.g,'gust'),wv:lvl(o.wv,'wave'),sw:lvl(o.sw,'swell'),v:lvl(o.v,'vis'),r:lvl(o.r,'rain'),th:A.weather_code[i]>=95?2:(o.cp>=1000?1:0),p:o.dp==null?0:o.dp<=-4?2:o.dp<=-2?1:0};o.fog=o.tc!=null&&o.dw!=null&&o.tc-o.dw<=1.5;if(o.fog)o.l.v=Math.max(o.l.v,1);
+  o.m=Math.max(...Object.values(o.l));return o});
+ const days=[...new Set(ROWS.map(r=>r.d))],win=r=>r.h>=C.h1&&r.h<=C.h2;
+ if(!days.includes(C.sel))C.sel=days[0];
+ const age=(Date.now()-D.t)/36e5,dt=new Date(D.t).toLocaleString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',hour12:false});
+ $('#st').textContent='Updated '+dt+(age>3?'. STALE: tap Update when you have signal.':'.')+' Window '+hh(C.h1)+' to '+hh(C.h2)+'.';
+ $('#days').innerHTML=days.map(d=>{const rs=ROWS.filter(r=>r.d==d&&win(r)),s=rs.length?Math.max(...rs.map(r=>r.m)):0,mw=Math.max(0,...rs.map(r=>r.g||0)),mv=Math.max(0,...rs.map(r=>r.wv||0));
+  const lab=new Date(d+'T12:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric'});
+  return `<button class="day s${s}${d==C.sel?' on':''}" data-day="${d}"><b>${lab}</b>${ST[s]}<br><small>G${R(mw)} · ${mv.toFixed(1)} m</small></button>`}).join('');
+ const rs=ROWS.filter(r=>r.d==C.sel),w=rs.filter(win),s=w.length?Math.max(...w.map(r=>r.m)):0;
+ const why=[['w','Wind','wind','kt'],['g','Gusts','gust','kt'],['wv','Waves','wave','m'],['sw','Swell','swell','m'],['v','Visibility','vis','km'],['r','Rain chance','rain','%']].map(([k,n,lk,u])=>{const f=w.find(r=>r.l[k]==2);return f?`${n} past limit (${Lm(lk)} ${u}) from ${hh(f.h)}`:null}).filter(Boolean);
+ const tw=w.find(r=>r.l.th==2),ta=w.find(r=>r.l.th==1),pf=w.find(r=>r.l.p>0),fg=w.find(r=>r.fog);
+ if(tw)why.push('Thunderstorm possible from '+hh(tw.h));else if(ta)why.push('Thunderstorm risk (high CAPE) from '+hh(ta.h));
+ if(pf)why.push((pf.l.p==2?'Pressure falling fast':'Pressure falling')+' ('+pf.dp.toFixed(1)+' hPa/3h) from '+hh(pf.h));
+ if(fg)why.push('Fog risk (temp near dew point) from '+hh(fg.h));
+ const hasM=!!(m&&m.hourly.wave_height&&m.hourly.wave_height.some(v=>v!=null)),di=days.indexOf(C.sel),sr=a.daily.sunrise[di],ss=a.daily.sunset[di],sun=sunT(C.sel,dec(C.pos),(a.utc_offset_seconds||0)/3600),mo=moonI(C.sel);
+ const hi=[],lo=[],tr=rs.filter(r=>r.td!=null);
+ for(let i=1;i<tr.length-1;i++){const v=tr[i].td,p=tr[i-1].td,n=tr[i+1].td,x=hh(tr[i].h).slice(0,5)+' '+v.toFixed(1);if(v>p&&v>=n)hi.push(x);if(v<p&&v<=n)lo.push(x)}
+ const mxv=k=>Math.max(...w.map(r=>r[k]??-1e9)),mnv=k=>Math.min(...w.map(r=>r[k]??1e9)),has=k=>w.some(r=>r[k]!=null),av=k=>{const x=w.map(r=>r[k]).filter(v=>v!=null);return x.length?x.reduce((p,c)=>p+c,0)/x.length:null};
+ const rainmm=w.reduce((p,r)=>p+(r.mm||0),0),cell=(r,k,c)=>`<td class="l${r.l[k]??0}">${c}</td>`,tab=C.tab||'m',none='<tr><td colspan="9">No hours in window</td></tr>';
+ const mt=w.map(r=>`<tr><td>${hh(r.h).slice(0,5)}</td>${cell(r,'w',cd(r.dr)+' '+R(r.w))}${cell(r,'g',R(r.g))}${cell(r,'wv',N(r.wv,1)+(r.wp!=null?'/'+R(r.wp)+'s':'')+' '+cd(r.wdr))}${cell(r,'sw',N(r.sw,1)+(r.sp!=null?'/'+R(r.sp)+'s':'')+' '+cd(r.sd))}<td>${N(r.ww,1)}</td><td>${r.cu==null?'–':r.cu.toFixed(1)+' '+cd(r.cdr)}</td><td>${N(r.sst,1)}</td><td>${N(r.td,2)}</td></tr>`).join('');
+ const wt=w.map(r=>`<tr><td>${hh(r.h).slice(0,5)}</td><td>${N(r.tc)}/${N(r.fl)}</td><td>${N(r.cl)}</td>${cell(r,'r',(r.th?'⚡':'')+N(r.r))}<td>${N(r.mm,1)}</td>${cell(r,'v',N(r.v,1))}${cell(r,'p',N(r.ps)+(r.dp==null?'':' ('+(r.dp>0?'+':'')+r.dp.toFixed(1)+')'))}${cell(r,'th',N(r.cp))}<td>${N(r.uv)}</td></tr>`).join('');
+ const mh='<tr><th>Time</th><th>Wind kt</th><th>Gust</th><th>Wave m/s</th><th>Swell m/s</th><th>Wind-wave m</th><th>Current kt</th><th>Sea °C</th><th>Tide m</th></tr>',wh='<tr><th>Time</th><th>Temp/feels °C</th><th>Cloud %</th><th>Rain %</th><th>Rain mm</th><th>Vis km</th><th>Pressure hPa (3h)</th><th>CAPE</th><th>UV</th></tr>';
+ const facts=[`Temp ${R(mnv('tc'))} to ${R(mxv('tc'))} °C (feels ${R(mnv('fl'))} to ${R(mxv('fl'))})`,`Cloud avg ${R(av('cl')??0)}%, rain ${rainmm.toFixed(1)} mm in window, UV max ${R(mxv('uv'))}`,`Pressure ${R(mnv('ps'))} to ${R(mxv('ps'))} hPa`,
+  has('sst')?`Sea temp ${N(av('sst'),1)} °C`+(has('cu')?`, current to ${mxv('cu').toFixed(1)} kt`:''):'',
+  `First light ${sun.cd} · sunrise ${sr.slice(11)} · sunset ${ss.slice(11)} · last light ${sun.cu}`,`Nautical twilight ${sun.nd} to ${sun.nu}`,`Moon ${mo} illuminated`,
+  hi.length||lo.length?`Tide highs: ${hi.join(', ')||'–'}<br>Tide lows: ${lo.join(', ')||'–'}`:'',hasM?'':'Marine data not available here. Move the point offshore: '+[['N','0.05,0'],['S','-0.05,0'],['E','0,0.05'],['W','0,-0.05']].map(([l,v])=>`<button data-mv="${v}">${l}</button>`).join(' ')].filter(Boolean).map(x=>`<li>${x}</li>`).join('');
+ const txt=`MARINE FORECAST ${C.sel} ${hh(C.h1)}-${hh(C.h2)} @ ${C.pos}\nStatus: ${ST[s]}\nWind ${R(mnv('w'))}-${R(mxv('w'))} kt, gusts to ${R(mxv('g'))} kt\n`+(has('wv')?`Waves to ${mxv('wv').toFixed(1)} m, swell to ${mxv('sw').toFixed(1)} m\n`:'')+`Temp ${R(mnv('tc'))}-${R(mxv('tc'))} C, cloud ${R(av('cl')??0)}%, rain chance max ${mxv('r')}% (${rainmm.toFixed(1)} mm), vis min ${mnv('v').toFixed(1)} km\nPressure ${R(mnv('ps'))}-${R(mxv('ps'))} hPa\n`+(hi.length||lo.length?`Tide H ${hi.join(', ')} L ${lo.join(', ')}\n`:'')+`First light ${sun.cd}, sunrise ${sr.slice(11)}, sunset ${ss.slice(11)}, last light ${sun.cu}, moon ${mo}\n`+(why.length?why.join('; ')+'\n':'')+`Open-Meteo model, fetched ${dt}. Check BoM warnings.`;
+ window.TXT=txt;
+ $('#out').innerHTML=`<div class="card"><span class="tag t${s}">${ST[s]}</span> <b>${new Date(C.sel+'T12:00').toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'short'})}</b>
+ ${why.length?'<ul>'+why.map(x=>`<li>${x}</li>`).join('')+'</ul>':'<p class="note" style="margin:6px 0 0">No limits breached in the ops window.</p>'}
+ <ul class="f">${facts}</ul>
+ <div class="c2"><button class="w${tab=='m'?' pri':''}" data-tab="m">Sea and wind</button><button class="w${tab=='w'?' pri':''}" data-tab="w">Sky and air</button></div>
+ <div class="tw"><table>${tab=='m'?mh+(mt||none):wh+(wt||none)}</table></div>
+ <button class="w" id="cp">Copy summary</button><button class="w" id="sh">Share summary</button></div>`;
+ $('#cp').onclick=()=>navigator.clipboard.writeText(TXT).then(()=>{$('#cp').textContent='Copied'},()=>{$('#cp').textContent='Copy failed'});
+ $('#sh').onclick=()=>navigator.share?navigator.share({text:TXT}).catch(()=>{}):0;
+ try{localStorage.setItem('fc',JSON.stringify(C))}catch(e){}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-day]'),t=e.target.closest('[data-tab]');if(b&&D){C.sel=b.dataset.day;render()}if(t&&D){C.tab=t.dataset.tab;render()}const mv=e.target.closest('[data-mv]');if(mv){const ll=dec(C.pos),d=mv.dataset.mv.split(',').map(Number);if(ll){setPos([ll[0]+d[0],ll[1]+d[1]]);run()}}});
+if(D)render();
+if(dec(C.pos)&&(!D||Date.now()-D.t>18e5))run();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
